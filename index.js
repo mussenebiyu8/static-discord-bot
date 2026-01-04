@@ -16,15 +16,13 @@ const client = new Client({
 /* ---------------- ENV VARIABLES ---------------- */
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const STATIC_ROLE_IDS = process.env.STATIC_ROLE_ID
-  ?.split(",")
-  .map(id => id.trim());
+const STATIC_ROLE_ID = process.env.STATIC_ROLE_ID;
 
 if (!DISCORD_TOKEN) {
   throw new Error("DISCORD_TOKEN is missing");
 }
 
-if (!STATIC_ROLE_IDS || STATIC_ROLE_IDS.length === 0) {
+if (!STATIC_ROLE_ID) {
   throw new Error("STATIC_ROLE_ID is missing");
 }
 
@@ -112,12 +110,8 @@ client.once("ready", async () => {
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  /* ---------- ROLE CHECK ---------- */
-  const hasRole = interaction.member.roles.cache.some(role =>
-    STATIC_ROLE_IDS.includes(role.id)
-  );
-
-  if (!hasRole) {
+  /* ---------- ROLE CHECK (SINGLE ROLE) ---------- */
+  if (!interaction.member.roles.cache.has(STATIC_ROLE_ID)) {
     return interaction.reply({
       content: "You do not have permission to use this command.",
       ephemeral: true

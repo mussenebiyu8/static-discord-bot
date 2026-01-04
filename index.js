@@ -6,27 +6,23 @@ import {
   REST
 } from "discord.js";
 
-// Create client
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
-
-// ✅ ENVIRONMENT VARIABLES (Railway)
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const STATIC_ROLE_ID = process.env.STATIC_ROLE_ID;
-
-// ❗ Safety check (helps debugging)
-if (!DISCORD_TOKEN) {
+/* ===== ENV CHECK ===== */
+if (!process.env.DISCORD_TOKEN) {
   console.error("DISCORD_TOKEN is missing!");
   process.exit(1);
 }
 
-if (!STATIC_ROLE_ID) {
+if (!process.env.STATIC_ROLE_ID) {
   console.error("STATIC_ROLE_ID is missing!");
   process.exit(1);
 }
 
-// Slash commands
+/* ===== CLIENT ===== */
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds]
+});
+
+/* ===== COMMANDS ===== */
 const commands = [
   new SlashCommandBuilder()
     .setName("setstatic")
@@ -55,68 +51,49 @@ const commands = [
     )
 ];
 
-// REST for registering slash commands
-const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
+/* ===== REGISTER COMMANDS ===== */
+const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-// When bot is ready
 client.once("ready", async () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+  console.log(`Logged in as ${client.user.tag}`);
 
-  try {
-    await rest.put(
-      Routes.applicationCommands(client.user.id),
-      { body: commands.map(cmd => cmd.toJSON()) }
-    );
-    console.log("✅ Slash commands registered");
-  } catch (err) {
-    console.error("❌ Failed to register commands:", err);
-  }
+  await rest.put(
+    Routes.applicationCommands(client.user.id),
+    { body: commands.map(cmd => cmd.toJSON()) }
+  );
+
+  console.log("Slash commands registered.");
 });
 
-// Handle commands
+/* ===== INTERACTIONS ===== */
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  // Role check
-  if (!interaction.member.roles.cache.has(STATIC_ROLE_ID)) {
+  const roleId = process.env.STATIC_ROLE_ID;
+
+  if (!interaction.member.roles.cache.has(roleId)) {
     return interaction.reply({
-      content: "❌ You do not have permission to use this command.",
+      content: "You do not have permission to use this command.",
       ephemeral: true
     });
   }
 
-  // /setstatic
   if (interaction.commandName === "setstatic") {
     const message = interaction.options.getString("message");
-
     await interaction.channel.send(message);
-    await interaction.reply({
-      content: "✅ Static message sent.",
-      ephemeral: true
-    });
+    await interaction.reply({ content: "Message sent.", ephemeral: true });
   }
 
-  // /updatestatic
   if (interaction.commandName === "updatestatic") {
     const messageId = interaction.options.getString("message_id");
     const newMessage = interaction.options.getString("message");
 
-    try {
-      const msg = await interaction.channel.messages.fetch(messageId);
-      await msg.edit(newMessage);
+    const msg = await interaction.channel.messages.fetch(messageId);
+    await msg.edit(newMessage);
 
-      await interaction.reply({
-        content: "✅ Static message updated.",
-        ephemeral: true
-      });
-    } catch {
-      await interaction.reply({
-        content: "❌ Could not find or edit that message.",
-        ephemeral: true
-      });
-    }
+    await interaction.reply({ content: "Message updated.", ephemeral: true });
   }
 });
 
-// ✅ LOGIN (THIS MUST MATCH THE VARIABLE ABOVE)
-client.login(DISCORD_TOKEN);
+/* ===== LOGIN ===== */
+client.login(process.env.DISCORD_TOKEN);

@@ -3,53 +3,83 @@ import {
   GatewayIntentBits,
   SlashCommandBuilder,
   Routes,
-  REST
+  REST,
+  ChannelType
 } from "discord.js";
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
+// Environment variables (Railway)
 const TOKEN = process.env.DISCORD_TOKEN;
 const STATIC_ROLE_ID = process.env.STATIC_ROLE_ID;
+
+/* ---------------- SLASH COMMAND DEFINITIONS ---------------- */
 
 const commands = [
   new SlashCommandBuilder()
     .setName("setstatic")
     .setDescription("Send a static message")
-    .addStringOption(o =>
-      o.setName("message").setDescription("Message text").setRequired(false)
+    .addStringOption(option =>
+      option
+        .setName("message")
+        .setDescription("Message text")
+        .setRequired(false)
     )
-    .addAttachmentOption(o =>
-      o.setName("image").setDescription("Optional image").setRequired(false)
+    .addAttachmentOption(option =>
+      option
+        .setName("image")
+        .setDescription("Optional image")
+        .setRequired(false)
     ),
 
   new SlashCommandBuilder()
     .setName("updatestatic")
     .setDescription("Update a static message")
-    .addStringOption(o =>
-      o.setName("message_id").setDescription("Message ID").setRequired(true)
+    .addStringOption(option =>
+      option
+        .setName("message_id")
+        .setDescription("ID of the message to edit")
+        .setRequired(true)
     )
-    .addStringOption(o =>
-      o.setName("message").setDescription("New text").setRequired(false)
+    .addStringOption(option =>
+      option
+        .setName("message")
+        .setDescription("New message text")
+        .setRequired(false)
     )
-    .addAttachmentOption(o =>
-      o.setName("image").setDescription("New image").setRequired(false)
+    .addAttachmentOption(option =>
+      option
+        .setName("image")
+        .setDescription("New image")
+        .setRequired(false)
     ),
 
   new SlashCommandBuilder()
     .setName("setstaticforum")
     .setDescription("Create a static forum post")
-    .addStringOption(o =>
-      o.setName("title").setDescription("Post title").setRequired(true)
+    .addStringOption(option =>
+      option
+        .setName("title")
+        .setDescription("Forum post title")
+        .setRequired(true)
     )
-    .addStringOption(o =>
-      o.setName("message").setDescription("Post content").setRequired(false)
+    .addStringOption(option =>
+      option
+        .setName("message")
+        .setDescription("Post content")
+        .setRequired(false)
     )
-    .addAttachmentOption(o =>
-      o.setName("image").setDescription("Optional image").setRequired(false)
+    .addAttachmentOption(option =>
+      option
+        .setName("image")
+        .setDescription("Optional image")
+        .setRequired(false)
     )
 ];
+
+/* ---------------- REGISTER COMMANDS ---------------- */
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
@@ -58,13 +88,16 @@ client.once("ready", async () => {
 
   await rest.put(
     Routes.applicationCommands(client.user.id),
-    { body: commands.map(c => c.toJSON()) }
+    { body: commands.map(cmd => cmd.toJSON()) }
   );
 });
+
+/* ---------------- COMMAND HANDLER ---------------- */
 
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
+  // Role restriction
   if (!interaction.member.roles.cache.has(STATIC_ROLE_ID)) {
     return interaction.reply({
       content: "You do not have permission to use this command.",
@@ -72,6 +105,7 @@ client.on("interactionCreate", async interaction => {
     });
   }
 
+  /* ---------- /setstatic ---------- */
   if (interaction.commandName === "setstatic") {
     const message = interaction.options.getString("message") ?? "";
     const image = interaction.options.getAttachment("image");
@@ -81,27 +115,37 @@ client.on("interactionCreate", async interaction => {
       files: image ? [image] : []
     });
 
-    return interaction.reply({ content: "Message sent.", ephemeral: true });
+    return interaction.reply({
+      content: "Message sent.",
+      ephemeral: true
+    });
   }
 
+  /* ---------- /updatestatic ---------- */
   if (interaction.commandName === "updatestatic") {
-    const id = interaction.options.getString("message_id");
-    const message = interaction.options.getString("message") ?? "";
+    const messageId = interaction.options.getString("message_id");
+    const newMessage = interaction.options.getString("message") ?? "";
     const image = interaction.options.getAttachment("image");
 
-    const msg = await interaction.channel.messages.fetch(id);
+    const msg = await interaction.channel.messages.fetch(messageId);
+
     await msg.edit({
-      content: message || msg.content || null,
+      content: newMessage || msg.content || null,
       files: image ? [image] : []
     });
 
-    return interaction.reply({ content: "Message updated.", ephemeral: true });
+    return interaction.reply({
+      content: "Message updated.",
+      ephemeral: true
+    });
   }
 
+  /* ---------- /setstaticforum ---------- */
   if (interaction.commandName === "setstaticforum") {
-    if (!interaction.channel.isThreadOnly()) {
+    // ✅ CORRECT forum channel check
+    if (interaction.channel.type !== ChannelType.GuildForum) {
       return interaction.reply({
-        content: "Use this command inside a forum channel.",
+        content: "This command must be used inside a forum channel.",
         ephemeral: true
       });
     }
@@ -124,5 +168,7 @@ client.on("interactionCreate", async interaction => {
     });
   }
 });
+
+/* ---------------- LOGIN ---------------- */
 
 client.login(process.env.DISCORD_TOKEN);

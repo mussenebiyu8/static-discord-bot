@@ -7,15 +7,28 @@ import {
   ChannelType
 } from "discord.js";
 
+/* ---------------- CLIENT ---------------- */
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// Environment variables (Railway)
-const TOKEN = process.env.DISCORD_TOKEN;
-const STATIC_ROLE_ID = process.env.STATIC_ROLE_ID;
+/* ---------------- ENV VARIABLES ---------------- */
 
-/* ---------------- SLASH COMMAND DEFINITIONS ---------------- */
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const STATIC_ROLE_IDS = process.env.STATIC_ROLE_ID
+  ?.split(",")
+  .map(id => id.trim());
+
+if (!DISCORD_TOKEN) {
+  throw new Error("DISCORD_TOKEN is missing");
+}
+
+if (!STATIC_ROLE_IDS || STATIC_ROLE_IDS.length === 0) {
+  throw new Error("STATIC_ROLE_ID is missing");
+}
+
+/* ---------------- COMMAND DEFINITIONS ---------------- */
 
 const commands = [
   new SlashCommandBuilder()
@@ -40,7 +53,7 @@ const commands = [
     .addStringOption(option =>
       option
         .setName("message_id")
-        .setDescription("ID of the message to edit")
+        .setDescription("Message ID to edit")
         .setRequired(true)
     )
     .addStringOption(option =>
@@ -79,9 +92,9 @@ const commands = [
     )
 ];
 
-/* ---------------- REGISTER COMMANDS ---------------- */
+/* ---------------- REGISTER GLOBAL COMMANDS ---------------- */
 
-const rest = new REST({ version: "10" }).setToken(TOKEN);
+const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
 
 client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -90,15 +103,21 @@ client.once("ready", async () => {
     Routes.applicationCommands(client.user.id),
     { body: commands.map(cmd => cmd.toJSON()) }
   );
+
+  console.log("Global slash commands registered.");
 });
 
-/* ---------------- COMMAND HANDLER ---------------- */
+/* ---------------- INTERACTION HANDLER ---------------- */
 
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  // Role restriction
-  if (!interaction.member.roles.cache.has(STATIC_ROLE_ID)) {
+  /* ---------- ROLE CHECK ---------- */
+  const hasRole = interaction.member.roles.cache.some(role =>
+    STATIC_ROLE_IDS.includes(role.id)
+  );
+
+  if (!hasRole) {
     return interaction.reply({
       content: "You do not have permission to use this command.",
       ephemeral: true
@@ -142,19 +161,27 @@ client.on("interactionCreate", async interaction => {
 
   /* ---------- /setstaticforum ---------- */
   if (interaction.commandName === "setstaticforum") {
-    // ✅ CORRECT forum channel check
-    if (interaction.channel.type !== ChannelType.GuildForum) {
+    const isForum =
+      interaction.channel.type === ChannelType.GuildForum ||
+      interaction.channel.parent?.type === ChannelType.GuildForum;
+
+    if (!isForum) {
       return interaction.reply({
-        content: "This command must be used inside a forum channel.",
+        content: "This command must be used in a forum channel.",
         ephemeral: true
       });
     }
+
+    const forumChannel =
+      interaction.channel.type === ChannelType.GuildForum
+        ? interaction.channel
+        : interaction.channel.parent;
 
     const title = interaction.options.getString("title");
     const message = interaction.options.getString("message") ?? "";
     const image = interaction.options.getAttachment("image");
 
-    await interaction.channel.threads.create({
+    await forumChannel.threads.create({
       name: title,
       message: {
         content: message || null,
@@ -171,4 +198,4 @@ client.on("interactionCreate", async interaction => {
 
 /* ---------------- LOGIN ---------------- */
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(DISCORD_TOKEN);

@@ -13,44 +13,41 @@ const client = new Client({
 const TOKEN = process.env.DISCORD_TOKEN;
 const STATIC_ROLE_ID = process.env.STATIC_ROLE_ID;
 
-// Slash commands
 const commands = [
   new SlashCommandBuilder()
     .setName("setstatic")
-    .setDescription("Send a static message (text + optional image)")
-    .addStringOption(option =>
-      option
-        .setName("message")
-        .setDescription("Message text")
-        .setRequired(false)
+    .setDescription("Send a static message")
+    .addStringOption(o =>
+      o.setName("message").setDescription("Message text").setRequired(false)
     )
-    .addAttachmentOption(option =>
-      option
-        .setName("image")
-        .setDescription("Image to send")
-        .setRequired(false)
+    .addAttachmentOption(o =>
+      o.setName("image").setDescription("Optional image").setRequired(false)
     ),
 
   new SlashCommandBuilder()
     .setName("updatestatic")
-    .setDescription("Update a static message (text + optional image)")
-    .addStringOption(option =>
-      option
-        .setName("message_id")
-        .setDescription("Message ID to edit")
-        .setRequired(true)
+    .setDescription("Update a static message")
+    .addStringOption(o =>
+      o.setName("message_id").setDescription("Message ID").setRequired(true)
     )
-    .addStringOption(option =>
-      option
-        .setName("message")
-        .setDescription("New message text")
-        .setRequired(false)
+    .addStringOption(o =>
+      o.setName("message").setDescription("New text").setRequired(false)
     )
-    .addAttachmentOption(option =>
-      option
-        .setName("image")
-        .setDescription("New image")
-        .setRequired(false)
+    .addAttachmentOption(o =>
+      o.setName("image").setDescription("New image").setRequired(false)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("setstaticforum")
+    .setDescription("Create a static forum post")
+    .addStringOption(o =>
+      o.setName("title").setDescription("Post title").setRequired(true)
+    )
+    .addStringOption(o =>
+      o.setName("message").setDescription("Post content").setRequired(false)
+    )
+    .addAttachmentOption(o =>
+      o.setName("image").setDescription("Optional image").setRequired(false)
     )
 ];
 
@@ -68,7 +65,6 @@ client.once("ready", async () => {
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  // Role check
   if (!interaction.member.roles.cache.has(STATIC_ROLE_ID)) {
     return interaction.reply({
       content: "You do not have permission to use this command.",
@@ -85,26 +81,45 @@ client.on("interactionCreate", async interaction => {
       files: image ? [image] : []
     });
 
-    await interaction.reply({
-      content: "Message sent.",
-      ephemeral: true
-    });
+    return interaction.reply({ content: "Message sent.", ephemeral: true });
   }
 
   if (interaction.commandName === "updatestatic") {
     const id = interaction.options.getString("message_id");
-    const newMessage = interaction.options.getString("message") ?? "";
+    const message = interaction.options.getString("message") ?? "";
     const image = interaction.options.getAttachment("image");
 
     const msg = await interaction.channel.messages.fetch(id);
-
     await msg.edit({
-      content: newMessage || msg.content || null,
+      content: message || msg.content || null,
       files: image ? [image] : []
     });
 
-    await interaction.reply({
-      content: "Message updated.",
+    return interaction.reply({ content: "Message updated.", ephemeral: true });
+  }
+
+  if (interaction.commandName === "setstaticforum") {
+    if (!interaction.channel.isThreadOnly()) {
+      return interaction.reply({
+        content: "Use this command inside a forum channel.",
+        ephemeral: true
+      });
+    }
+
+    const title = interaction.options.getString("title");
+    const message = interaction.options.getString("message") ?? "";
+    const image = interaction.options.getAttachment("image");
+
+    await interaction.channel.threads.create({
+      name: title,
+      message: {
+        content: message || null,
+        files: image ? [image] : []
+      }
+    });
+
+    return interaction.reply({
+      content: "Forum post created.",
       ephemeral: true
     });
   }

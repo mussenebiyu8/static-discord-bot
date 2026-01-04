@@ -6,37 +6,34 @@ import {
   REST
 } from "discord.js";
 
-/* ===== ENV CHECK ===== */
-if (!process.env.DISCORD_TOKEN) {
-  console.error("DISCORD_TOKEN is missing!");
-  process.exit(1);
-}
-
-if (!process.env.STATIC_ROLE_ID) {
-  console.error("STATIC_ROLE_ID is missing!");
-  process.exit(1);
-}
-
-/* ===== CLIENT ===== */
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-/* ===== COMMANDS ===== */
+const TOKEN = process.env.DISCORD_TOKEN;
+const STATIC_ROLE_ID = process.env.STATIC_ROLE_ID;
+
+// Slash commands
 const commands = [
   new SlashCommandBuilder()
     .setName("setstatic")
-    .setDescription("Send a static message")
+    .setDescription("Send a static message (text + optional image)")
     .addStringOption(option =>
       option
         .setName("message")
-        .setDescription("Message to send")
-        .setRequired(true)
+        .setDescription("Message text")
+        .setRequired(false)
+    )
+    .addAttachmentOption(option =>
+      option
+        .setName("image")
+        .setDescription("Image to send")
+        .setRequired(false)
     ),
 
   new SlashCommandBuilder()
     .setName("updatestatic")
-    .setDescription("Update a static message")
+    .setDescription("Update a static message (text + optional image)")
     .addStringOption(option =>
       option
         .setName("message_id")
@@ -46,32 +43,33 @@ const commands = [
     .addStringOption(option =>
       option
         .setName("message")
-        .setDescription("New message")
-        .setRequired(true)
+        .setDescription("New message text")
+        .setRequired(false)
+    )
+    .addAttachmentOption(option =>
+      option
+        .setName("image")
+        .setDescription("New image")
+        .setRequired(false)
     )
 ];
 
-/* ===== REGISTER COMMANDS ===== */
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
 
   await rest.put(
     Routes.applicationCommands(client.user.id),
-    { body: commands.map(cmd => cmd.toJSON()) }
+    { body: commands.map(c => c.toJSON()) }
   );
-
-  console.log("Slash commands registered.");
 });
 
-/* ===== INTERACTIONS ===== */
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  const roleId = process.env.STATIC_ROLE_ID;
-
-  if (!interaction.member.roles.cache.has(roleId)) {
+  // Role check
+  if (!interaction.member.roles.cache.has(STATIC_ROLE_ID)) {
     return interaction.reply({
       content: "You do not have permission to use this command.",
       ephemeral: true
@@ -79,21 +77,37 @@ client.on("interactionCreate", async interaction => {
   }
 
   if (interaction.commandName === "setstatic") {
-    const message = interaction.options.getString("message");
-    await interaction.channel.send(message);
-    await interaction.reply({ content: "Message sent.", ephemeral: true });
+    const message = interaction.options.getString("message") ?? "";
+    const image = interaction.options.getAttachment("image");
+
+    await interaction.channel.send({
+      content: message || null,
+      files: image ? [image] : []
+    });
+
+    await interaction.reply({
+      content: "Message sent.",
+      ephemeral: true
+    });
   }
 
   if (interaction.commandName === "updatestatic") {
-    const messageId = interaction.options.getString("message_id");
-    const newMessage = interaction.options.getString("message");
+    const id = interaction.options.getString("message_id");
+    const newMessage = interaction.options.getString("message") ?? "";
+    const image = interaction.options.getAttachment("image");
 
-    const msg = await interaction.channel.messages.fetch(messageId);
-    await msg.edit(newMessage);
+    const msg = await interaction.channel.messages.fetch(id);
 
-    await interaction.reply({ content: "Message updated.", ephemeral: true });
+    await msg.edit({
+      content: newMessage || msg.content || null,
+      files: image ? [image] : []
+    });
+
+    await interaction.reply({
+      content: "Message updated.",
+      ephemeral: true
+    });
   }
 });
 
-/* ===== LOGIN ===== */
 client.login(process.env.DISCORD_TOKEN);

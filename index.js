@@ -13,13 +13,15 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-/* ---------------- ENV VARIABLES ---------------- */
+/* ---------------- ENV ---------------- */
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const STATIC_ROLE_ID = process.env.STATIC_ROLE_ID;
+const GUILD_ID = process.env.GUILD_ID;
 
 if (!DISCORD_TOKEN) throw new Error("DISCORD_TOKEN missing");
 if (!STATIC_ROLE_ID) throw new Error("STATIC_ROLE_ID missing");
+if (!GUILD_ID) throw new Error("GUILD_ID missing");
 
 /* ---------------- COMMANDS ---------------- */
 
@@ -61,7 +63,7 @@ const commands = [
     )
 ];
 
-/* ---------------- REGISTER COMMANDS ---------------- */
+/* ---------------- REGISTER (GUILD ONLY) ---------------- */
 
 const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
 
@@ -69,34 +71,27 @@ client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
 
   await rest.put(
-    Routes.applicationCommands(client.user.id),
+    Routes.applicationGuildCommands(client.user.id, GUILD_ID),
     { body: commands.map(c => c.toJSON()) }
   );
 
-  console.log("Global slash commands registered.");
+  console.log("Guild slash commands registered.");
 });
 
 /* ---------------- INTERACTIONS ---------------- */
 
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
-  if (!interaction.inGuild()) {
-    return interaction.reply({
-      content: "Commands can only be used in servers.",
-      ephemeral: true
-    });
-  }
+  if (!interaction.inGuild()) return;
 
-  const member = interaction.member;
-  if (!member?.roles?.cache?.has(STATIC_ROLE_ID)) {
+  if (!interaction.member.roles.cache.has(STATIC_ROLE_ID)) {
     return interaction.reply({
       content: "You do not have permission to use this command.",
       ephemeral: true
     });
   }
 
-  /* -------- setstatic -------- */
-
+  /* ---- setstatic ---- */
   if (interaction.commandName === "setstatic") {
     const message = interaction.options.getString("message");
     const image = interaction.options.getAttachment("image");
@@ -109,8 +104,7 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply({ content: "Message sent.", ephemeral: true });
   }
 
-  /* -------- updatestatic -------- */
-
+  /* ---- updatestatic ---- */
   if (interaction.commandName === "updatestatic") {
     const id = interaction.options.getString("message_id");
     const message = interaction.options.getString("message");
@@ -126,20 +120,19 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply({ content: "Message updated.", ephemeral: true });
   }
 
-  /* -------- setstaticforum -------- */
-
+  /* ---- setstaticforum ---- */
   if (interaction.commandName === "setstaticforum") {
-    let forumChannel = null;
+    let forum = null;
 
     if (interaction.channel.type === ChannelType.GuildForum) {
-      forumChannel = interaction.channel;
+      forum = interaction.channel;
     } else if (interaction.channel.parent?.type === ChannelType.GuildForum) {
-      forumChannel = interaction.channel.parent;
+      forum = interaction.channel.parent;
     }
 
-    if (!forumChannel) {
+    if (!forum) {
       return interaction.reply({
-        content: "Use this command inside a forum or a forum post.",
+        content: "Use this command inside a forum or forum thread.",
         ephemeral: true
       });
     }
@@ -148,7 +141,7 @@ client.on("interactionCreate", async interaction => {
     const message = interaction.options.getString("message");
     const image = interaction.options.getAttachment("image");
 
-    await forumChannel.threads.create({
+    await forum.threads.create({
       name: title,
       message: {
         content: message || null,

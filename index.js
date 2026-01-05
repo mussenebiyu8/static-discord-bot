@@ -110,8 +110,13 @@ client.once("ready", async () => {
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  /* ---------- ROLE CHECK (SINGLE ROLE) ---------- */
-  if (!interaction.member.roles.cache.has(STATIC_ROLE_ID)) {
+  /* ---------- SAFE ROLE CHECK ---------- */
+  const memberRoles = interaction.member.roles.cache.map(r => r.id);
+
+  console.log("STATIC_ROLE_ID:", STATIC_ROLE_ID);
+  console.log("User role IDs:", memberRoles);
+
+  if (!memberRoles.includes(STATIC_ROLE_ID)) {
     return interaction.reply({
       content: "You do not have permission to use this command.",
       ephemeral: true

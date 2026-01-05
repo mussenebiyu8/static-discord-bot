@@ -30,7 +30,7 @@ const commands = [
     .setName("setstatic")
     .setDescription("Send a static message")
     .addStringOption(o =>
-      o.setName("message").setDescription("Message text").setRequired(false)
+      o.setName("message").setDescription("Message text")
     )
     .addAttachmentOption(o => o.setName("image1").setDescription("Image 1"))
     .addAttachmentOption(o => o.setName("image2").setDescription("Image 2"))
@@ -83,12 +83,11 @@ client.once("ready", async () => {
   console.log("Guild slash commands registered.");
 });
 
-/* ---------------- INTERACTION HANDLER ---------------- */
+/* ---------------- INTERACTIONS ---------------- */
 
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  /* ---------- ROLE CHECK ---------- */
   if (!interaction.member.roles.cache.has(STATIC_ROLE_ID)) {
     return interaction.reply({
       content: "You do not have permission to use this command.",
@@ -98,40 +97,58 @@ client.on("interactionCreate", async interaction => {
 
   /* ---------- /setstatic ---------- */
   if (interaction.commandName === "setstatic") {
-    const text = interaction.options.getString("message");
+    try {
+      const text = interaction.options.getString("message");
 
-    const images = ["image1", "image2", "image3", "image4"]
-      .map(name => interaction.options.getAttachment(name))
-      .filter(Boolean);
+      const images = ["image1", "image2", "image3", "image4"]
+        .map(name => interaction.options.getAttachment(name))
+        .filter(Boolean);
 
-    await interaction.channel.send({
-      content: text || undefined,
-      files: images.length ? images : undefined
-    });
+      await interaction.channel.send({
+        content: text || undefined,
+        files: images.length ? images : undefined,
+        allowedMentions: { parse: [] } // 🔑 FIX
+      });
 
-    return interaction.reply({
-      content: "Static message sent.",
-      ephemeral: true
-    });
+      return interaction.reply({
+        content: "Static message sent.",
+        ephemeral: true
+      });
+    } catch (err) {
+      console.error(err);
+      return interaction.reply({
+        content: "Failed to send message. Check bot permissions.",
+        ephemeral: true
+      });
+    }
   }
 
   /* ---------- /updatestatic ---------- */
   if (interaction.commandName === "updatestatic") {
-    const messageId = interaction.options.getString("message_id");
-    const newText = interaction.options.getString("message");
-    const image = interaction.options.getAttachment("image");
+    try {
+      const messageId = interaction.options.getString("message_id");
+      const newText = interaction.options.getString("message");
+      const image = interaction.options.getAttachment("image");
 
-    const msg = await interaction.channel.messages.fetch(messageId);
+      const msg = await interaction.channel.messages.fetch(messageId);
 
-    await msg.edit({
-      content: newText ?? msg.content,
-      files: image ? [image] : undefined
-    });
+      await msg.edit({
+        content: newText ?? msg.content,
+        files: image ? [image] : undefined,
+        allowedMentions: { parse: [] } // 🔑 FIX
+      });
 
-    return interaction.reply({
-      content: "Message updated.",
-      ephemeral: true
-    });
+      return interaction.reply({
+        content: "Message updated.",
+        ephemeral: true
+      });
+    } catch (err) {
+      console.error(err);
+      return interaction.reply({
+        content: "Failed to update message.",
+        ephemeral: true
+      });
+    }
   }
 
   /* ---------- /setstaticforum ---------- */
@@ -148,22 +165,31 @@ client.on("interactionCreate", async interaction => {
       });
     }
 
-    const title = interaction.options.getString("title");
-    const text = interaction.options.getString("message");
-    const image = interaction.options.getAttachment("image");
+    try {
+      const title = interaction.options.getString("title");
+      const text = interaction.options.getString("message");
+      const image = interaction.options.getAttachment("image");
 
-    await forum.threads.create({
-      name: title,
-      message: {
-        content: text || undefined,
-        files: image ? [image] : undefined
-      }
-    });
+      await forum.threads.create({
+        name: title,
+        message: {
+          content: text || undefined,
+          files: image ? [image] : undefined,
+          allowedMentions: { parse: [] } // 🔑 FIX
+        }
+      });
 
-    return interaction.reply({
-      content: "Forum post created.",
-      ephemeral: true
-    });
+      return interaction.reply({
+        content: "Forum post created.",
+        ephemeral: true
+      });
+    } catch (err) {
+      console.error(err);
+      return interaction.reply({
+        content: "Failed to create forum post.",
+        ephemeral: true
+      });
+    }
   }
 });
 

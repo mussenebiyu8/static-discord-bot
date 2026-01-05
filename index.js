@@ -13,15 +13,15 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-/* ---------------- ENV ---------------- */
+/* ---------------- ENV VARIABLES ---------------- */
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const STATIC_ROLE_ID = process.env.STATIC_ROLE_ID;
-const GUILD_ID = process.env.GUILD_ID;
+const GUILD_ID = process.env.GUILD_ID; // guild-only for testing
 
-if (!DISCORD_TOKEN || !STATIC_ROLE_ID || !GUILD_ID) {
-  throw new Error("Missing required environment variables");
-}
+if (!DISCORD_TOKEN) throw new Error("DISCORD_TOKEN missing");
+if (!STATIC_ROLE_ID) throw new Error("STATIC_ROLE_ID missing");
+if (!GUILD_ID) throw new Error("GUILD_ID missing");
 
 /* ---------------- COMMANDS ---------------- */
 
@@ -30,10 +30,19 @@ const commands = [
     .setName("setstatic")
     .setDescription("Send a static message")
     .addStringOption(o =>
-      o.setName("message").setDescription("Message").setRequired(false)
+      o.setName("message").setDescription("Message text").setRequired(false)
     )
     .addAttachmentOption(o =>
-      o.setName("image").setDescription("Optional image").setRequired(false)
+      o.setName("image1").setDescription("Image 1").setRequired(false)
+    )
+    .addAttachmentOption(o =>
+      o.setName("image2").setDescription("Image 2").setRequired(false)
+    )
+    .addAttachmentOption(o =>
+      o.setName("image3").setDescription("Image 3").setRequired(false)
+    )
+    .addAttachmentOption(o =>
+      o.setName("image4").setDescription("Image 4").setRequired(false)
     ),
 
   new SlashCommandBuilder()
@@ -51,12 +60,12 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("setstaticforum")
-    .setDescription("Create a forum post")
+    .setDescription("Create a static forum post")
     .addStringOption(o =>
       o.setName("title").setDescription("Post title").setRequired(true)
     )
     .addStringOption(o =>
-      o.setName("message").setDescription("Post content").setRequired(false)
+      o.setName("message").setDescription("Post text").setRequired(false)
     )
     .addAttachmentOption(o =>
       o.setName("image").setDescription("Optional image").setRequired(false)
@@ -82,12 +91,9 @@ client.once("ready", async () => {
 
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
-  if (!interaction.guild) return;
 
-  // ✅ SAFE ROLE CHECK
-  const member = await interaction.guild.members.fetch(interaction.user.id);
-
-  if (!member.roles.cache.has(STATIC_ROLE_ID)) {
+  // Role check
+  if (!interaction.member.roles.cache.has(STATIC_ROLE_ID)) {
     return interaction.reply({
       content: "You do not have permission to use this command.",
       ephemeral: true
@@ -97,29 +103,42 @@ client.on("interactionCreate", async interaction => {
   /* ---------- /setstatic ---------- */
   if (interaction.commandName === "setstatic") {
     const message = interaction.options.getString("message") ?? "";
-    const image = interaction.options.getAttachment("image");
+
+    const images = [
+      interaction.options.getAttachment("image1"),
+      interaction.options.getAttachment("image2"),
+      interaction.options.getAttachment("image3"),
+      interaction.options.getAttachment("image4")
+    ].filter(Boolean);
 
     await interaction.channel.send({
       content: message || null,
-      files: image ? [image] : []
+      files: images
     });
 
-    return interaction.reply({ content: "Message sent.", ephemeral: true });
+    return interaction.reply({
+      content: "Static message sent.",
+      ephemeral: true
+    });
   }
 
   /* ---------- /updatestatic ---------- */
   if (interaction.commandName === "updatestatic") {
-    const id = interaction.options.getString("message_id");
-    const message = interaction.options.getString("message") ?? "";
+    const messageId = interaction.options.getString("message_id");
+    const newText = interaction.options.getString("message");
     const image = interaction.options.getAttachment("image");
 
-    const msg = await interaction.channel.messages.fetch(id);
+    const msg = await interaction.channel.messages.fetch(messageId);
+
     await msg.edit({
-      content: message || msg.content,
+      content: newText ?? msg.content,
       files: image ? [image] : []
     });
 
-    return interaction.reply({ content: "Message updated.", ephemeral: true });
+    return interaction.reply({
+      content: "Message updated.",
+      ephemeral: true
+    });
   }
 
   /* ---------- /setstaticforum ---------- */

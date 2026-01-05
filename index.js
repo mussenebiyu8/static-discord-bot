@@ -19,9 +19,9 @@ const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const STATIC_ROLE_ID = process.env.STATIC_ROLE_ID;
 const GUILD_ID = process.env.GUILD_ID;
 
-if (!DISCORD_TOKEN) throw new Error("DISCORD_TOKEN missing");
-if (!STATIC_ROLE_ID) throw new Error("STATIC_ROLE_ID missing");
-if (!GUILD_ID) throw new Error("GUILD_ID missing");
+if (!DISCORD_TOKEN || !STATIC_ROLE_ID || !GUILD_ID) {
+  throw new Error("Missing required environment variables");
+}
 
 /* ---------------- COMMANDS ---------------- */
 
@@ -43,7 +43,7 @@ const commands = [
       o.setName("message_id").setDescription("Message ID").setRequired(true)
     )
     .addStringOption(o =>
-      o.setName("message").setDescription("New message").setRequired(false)
+      o.setName("message").setDescription("New text").setRequired(false)
     )
     .addAttachmentOption(o =>
       o.setName("image").setDescription("New image").setRequired(false)
@@ -63,7 +63,7 @@ const commands = [
     )
 ];
 
-/* ---------------- REGISTER (GUILD ONLY) ---------------- */
+/* ---------------- REGISTER GUILD COMMANDS ---------------- */
 
 const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
 
@@ -82,18 +82,21 @@ client.once("ready", async () => {
 
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
-  if (!interaction.inGuild()) return;
+  if (!interaction.guild) return;
 
-  if (!interaction.member.roles.cache.has(STATIC_ROLE_ID)) {
+  // ✅ SAFE ROLE CHECK
+  const member = await interaction.guild.members.fetch(interaction.user.id);
+
+  if (!member.roles.cache.has(STATIC_ROLE_ID)) {
     return interaction.reply({
       content: "You do not have permission to use this command.",
       ephemeral: true
     });
   }
 
-  /* ---- setstatic ---- */
+  /* ---------- /setstatic ---------- */
   if (interaction.commandName === "setstatic") {
-    const message = interaction.options.getString("message");
+    const message = interaction.options.getString("message") ?? "";
     const image = interaction.options.getAttachment("image");
 
     await interaction.channel.send({
@@ -104,41 +107,41 @@ client.on("interactionCreate", async interaction => {
     return interaction.reply({ content: "Message sent.", ephemeral: true });
   }
 
-  /* ---- updatestatic ---- */
+  /* ---------- /updatestatic ---------- */
   if (interaction.commandName === "updatestatic") {
     const id = interaction.options.getString("message_id");
-    const message = interaction.options.getString("message");
+    const message = interaction.options.getString("message") ?? "";
     const image = interaction.options.getAttachment("image");
 
     const msg = await interaction.channel.messages.fetch(id);
-
     await msg.edit({
-      content: message ?? msg.content,
+      content: message || msg.content,
       files: image ? [image] : []
     });
 
     return interaction.reply({ content: "Message updated.", ephemeral: true });
   }
 
-  /* ---- setstaticforum ---- */
+  /* ---------- /setstaticforum ---------- */
   if (interaction.commandName === "setstaticforum") {
-    let forum = null;
+    const isForum =
+      interaction.channel.type === ChannelType.GuildForum ||
+      interaction.channel.parent?.type === ChannelType.GuildForum;
 
-    if (interaction.channel.type === ChannelType.GuildForum) {
-      forum = interaction.channel;
-    } else if (interaction.channel.parent?.type === ChannelType.GuildForum) {
-      forum = interaction.channel.parent;
-    }
-
-    if (!forum) {
+    if (!isForum) {
       return interaction.reply({
-        content: "Use this command inside a forum or forum thread.",
+        content: "Use this command inside a forum channel.",
         ephemeral: true
       });
     }
 
+    const forum =
+      interaction.channel.type === ChannelType.GuildForum
+        ? interaction.channel
+        : interaction.channel.parent;
+
     const title = interaction.options.getString("title");
-    const message = interaction.options.getString("message");
+    const message = interaction.options.getString("message") ?? "";
     const image = interaction.options.getAttachment("image");
 
     await forum.threads.create({

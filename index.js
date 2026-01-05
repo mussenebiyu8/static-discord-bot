@@ -18,79 +18,50 @@ const client = new Client({
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const STATIC_ROLE_ID = process.env.STATIC_ROLE_ID;
 
-if (!DISCORD_TOKEN) {
-  throw new Error("DISCORD_TOKEN is missing");
-}
+if (!DISCORD_TOKEN) throw new Error("DISCORD_TOKEN missing");
+if (!STATIC_ROLE_ID) throw new Error("STATIC_ROLE_ID missing");
 
-if (!STATIC_ROLE_ID) {
-  throw new Error("STATIC_ROLE_ID is missing");
-}
-
-/* ---------------- COMMAND DEFINITIONS ---------------- */
+/* ---------------- COMMANDS ---------------- */
 
 const commands = [
   new SlashCommandBuilder()
     .setName("setstatic")
     .setDescription("Send a static message")
-    .addStringOption(option =>
-      option
-        .setName("message")
-        .setDescription("Message text")
-        .setRequired(false)
+    .addStringOption(o =>
+      o.setName("message").setDescription("Message").setRequired(false)
     )
-    .addAttachmentOption(option =>
-      option
-        .setName("image")
-        .setDescription("Optional image")
-        .setRequired(false)
+    .addAttachmentOption(o =>
+      o.setName("image").setDescription("Optional image").setRequired(false)
     ),
 
   new SlashCommandBuilder()
     .setName("updatestatic")
     .setDescription("Update a static message")
-    .addStringOption(option =>
-      option
-        .setName("message_id")
-        .setDescription("Message ID to edit")
-        .setRequired(true)
+    .addStringOption(o =>
+      o.setName("message_id").setDescription("Message ID").setRequired(true)
     )
-    .addStringOption(option =>
-      option
-        .setName("message")
-        .setDescription("New message text")
-        .setRequired(false)
+    .addStringOption(o =>
+      o.setName("message").setDescription("New message").setRequired(false)
     )
-    .addAttachmentOption(option =>
-      option
-        .setName("image")
-        .setDescription("New image")
-        .setRequired(false)
+    .addAttachmentOption(o =>
+      o.setName("image").setDescription("New image").setRequired(false)
     ),
 
   new SlashCommandBuilder()
     .setName("setstaticforum")
-    .setDescription("Create a static forum post")
-    .addStringOption(option =>
-      option
-        .setName("title")
-        .setDescription("Forum post title")
-        .setRequired(true)
+    .setDescription("Create a forum post")
+    .addStringOption(o =>
+      o.setName("title").setDescription("Post title").setRequired(true)
     )
-    .addStringOption(option =>
-      option
-        .setName("message")
-        .setDescription("Post content")
-        .setRequired(false)
+    .addStringOption(o =>
+      o.setName("message").setDescription("Post content").setRequired(false)
     )
-    .addAttachmentOption(option =>
-      option
-        .setName("image")
-        .setDescription("Optional image")
-        .setRequired(false)
+    .addAttachmentOption(o =>
+      o.setName("image").setDescription("Optional image").setRequired(false)
     )
 ];
 
-/* ---------------- REGISTER GLOBAL COMMANDS ---------------- */
+/* ---------------- REGISTER COMMANDS ---------------- */
 
 const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
 
@@ -99,33 +70,35 @@ client.once("ready", async () => {
 
   await rest.put(
     Routes.applicationCommands(client.user.id),
-    { body: commands.map(cmd => cmd.toJSON()) }
+    { body: commands.map(c => c.toJSON()) }
   );
 
   console.log("Global slash commands registered.");
 });
 
-/* ---------------- INTERACTION HANDLER ---------------- */
+/* ---------------- INTERACTIONS ---------------- */
 
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
+  if (!interaction.inGuild()) {
+    return interaction.reply({
+      content: "Commands can only be used in servers.",
+      ephemeral: true
+    });
+  }
 
-  /* ---------- SAFE ROLE CHECK ---------- */
-  const memberRoles = interaction.member.roles.cache.map(r => r.id);
-
-  console.log("STATIC_ROLE_ID:", STATIC_ROLE_ID);
-  console.log("User role IDs:", memberRoles);
-
-  if (!memberRoles.includes(STATIC_ROLE_ID)) {
+  const member = interaction.member;
+  if (!member?.roles?.cache?.has(STATIC_ROLE_ID)) {
     return interaction.reply({
       content: "You do not have permission to use this command.",
       ephemeral: true
     });
   }
 
-  /* ---------- /setstatic ---------- */
+  /* -------- setstatic -------- */
+
   if (interaction.commandName === "setstatic") {
-    const message = interaction.options.getString("message") ?? "";
+    const message = interaction.options.getString("message");
     const image = interaction.options.getAttachment("image");
 
     await interaction.channel.send({
@@ -133,51 +106,46 @@ client.on("interactionCreate", async interaction => {
       files: image ? [image] : []
     });
 
-    return interaction.reply({
-      content: "Message sent.",
-      ephemeral: true
-    });
+    return interaction.reply({ content: "Message sent.", ephemeral: true });
   }
 
-  /* ---------- /updatestatic ---------- */
+  /* -------- updatestatic -------- */
+
   if (interaction.commandName === "updatestatic") {
-    const messageId = interaction.options.getString("message_id");
-    const newMessage = interaction.options.getString("message") ?? "";
+    const id = interaction.options.getString("message_id");
+    const message = interaction.options.getString("message");
     const image = interaction.options.getAttachment("image");
 
-    const msg = await interaction.channel.messages.fetch(messageId);
+    const msg = await interaction.channel.messages.fetch(id);
 
     await msg.edit({
-      content: newMessage || msg.content || null,
+      content: message ?? msg.content,
       files: image ? [image] : []
     });
 
-    return interaction.reply({
-      content: "Message updated.",
-      ephemeral: true
-    });
+    return interaction.reply({ content: "Message updated.", ephemeral: true });
   }
 
-  /* ---------- /setstaticforum ---------- */
-  if (interaction.commandName === "setstaticforum") {
-    const isForum =
-      interaction.channel.type === ChannelType.GuildForum ||
-      interaction.channel.parent?.type === ChannelType.GuildForum;
+  /* -------- setstaticforum -------- */
 
-    if (!isForum) {
+  if (interaction.commandName === "setstaticforum") {
+    let forumChannel = null;
+
+    if (interaction.channel.type === ChannelType.GuildForum) {
+      forumChannel = interaction.channel;
+    } else if (interaction.channel.parent?.type === ChannelType.GuildForum) {
+      forumChannel = interaction.channel.parent;
+    }
+
+    if (!forumChannel) {
       return interaction.reply({
-        content: "This command must be used in a forum channel.",
+        content: "Use this command inside a forum or a forum post.",
         ephemeral: true
       });
     }
 
-    const forumChannel =
-      interaction.channel.type === ChannelType.GuildForum
-        ? interaction.channel
-        : interaction.channel.parent;
-
     const title = interaction.options.getString("title");
-    const message = interaction.options.getString("message") ?? "";
+    const message = interaction.options.getString("message");
     const image = interaction.options.getAttachment("image");
 
     await forumChannel.threads.create({
